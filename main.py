@@ -5,16 +5,22 @@ import requests
 from bs4 import BeautifulSoup as bs
 from aiogram import types, executor
 from config import weather_API
+from dataclasses import dataclass
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-# State Class
+# Types Class
 
+@dataclass()
+class Weather:
+    name: str
+    city: str
+
+# State Class
 
 class FSMSettings(StatesGroup):
     name = State()
     city = State()
-
 
 # Logic
 
