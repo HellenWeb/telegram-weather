@@ -8,19 +8,26 @@ from config import weather_API
 from dataclasses import dataclass
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+import re
 
 # Types Class
+
 
 @dataclass()
 class Weather:
     name: str
     city: str
+    country: str
+
 
 # State Class
+
 
 class FSMSettings(StatesGroup):
     name = State()
     city = State()
+    country = State()
+
 
 # Logic
 
@@ -56,6 +63,20 @@ async def upload_name(message: types.message, state: FSMContext):
         db.update_city(message.from_user.id, data["city"])
     else:
         db.inster_city(message.from_user.id, data["city"])
+    await state.finish()
+
+
+@dp.message_handler(state=FSMSettings.country)
+async def upload_name(message: types.message, state: FSMContext):
+    """Detected data"""
+    async with state.proxy() as data:
+        data["country"] = message.text
+    await message.answer("Country saved")
+    """Checking in the database"""
+    if db.show_info(message.from_user.id):
+        db.update_country(message.from_user.id, data["country"])
+    else:
+        db.inster_country(message.from_user.id, data["country"])
     await state.finish()
 
 
@@ -127,22 +148,20 @@ async def settings_command(message: types.Message):
 @dp.message_handler(commands=["weather"])
 async def weather(message: types.Message):
     try:
-        r = requests.get("https://time-in.ru/coordinates/russia")
+        for line in db.show_info(message.from_user.id)[0][3].split("\n"):
+            r = requests.get(
+                f"https://time-in.ru/coordinates/{line[0].lower() + line[1:]}"
+            )
         html = bs(r.content, "html.parser")
-        items = html.select(".coordinates-items > li")
-        if len(items):
-            for el in items:
-                if (
-                    el.select(".coordinates-items-left")[0].text
-                    == db.show_info(message.from_user.id)[0][3]
-                ):
-                    title = el.select(".coordinates-items-right")
-                    api = requests.get(
-                        f"https://api.openweathermap.org/data/2.5/weather?lat={title[0].text.split(', ')[0]}&lon={title[0].text.split(', ')[1]}&appid={weather_API}"
-                    ).json()
-                    await message.answer(
-                        f'\nCity: {db.show_info(message.from_user.id)[0][3]}\nTemperature: {round(api["main"]["temp"] - 273)}°С\nDescription: {api["weather"][0]["description"]}\nHumidity: {api["main"]["humidity"]}%'
-                    )
+        title = re.compile("[а-яА-Я|:|^,]").sub(
+            "", html.select(".coordinates-city-info")[0].text
+        )
+        api = requests.get(
+            f"https://api.openweathermap.org/data/2.5/weather?lat={title.split(' ')[2]}&lon={title.split(' ')[3]}&appid={weather_API}"
+        ).json()
+        await message.answer(
+            f'\nCity: {api["name"]}\nTemperature: {round(api["main"]["temp"] - 273)}°С\nDescription: {api["weather"][0]["description"]}\nHumidity: {api["main"]["humidity"]}%'
+        )
     except IndexError or TypeError:
         await message.answer(
             "<strong>Enter your profile information</strong> /settings"
@@ -209,7 +228,7 @@ async def reply_callbacks(message: types.Message):
             await message.answer("Enter your name")
         if message.text == "City":
             await FSMSettings.city.set()
-            await message.answer("Enter your city on Russian (Москва)")
+            await message.answer("Enter your city (Berlin)")
         if message.text == "⬅️":
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
             markup.row("Name", "City")
@@ -221,7 +240,7 @@ async def reply_callbacks(message: types.Message):
                 )
             except IndexError or TypeError:
                 await message.answer(
-                    f"<strong>ID</strong> - {message.from_user.id}\n<strong>Name</strong> - empty\n<strong>City</strong> - empty\n\n<strong>To display the data you need to enter all of them</strong>",
+                    f"<strong>ID</strong> - {message.from_user.id}\n<strong>Name</strong> - empty\n<<strong>City</strong> - empty\n\n<strong>To display the data you need to enter all of them</strong>",
                     reply_markup=markup,
                 )
         if message.text == "🏠":
@@ -233,22 +252,20 @@ async def reply_callbacks(message: types.Message):
             )
         if message.text == "🌦":
             try:
-                r = requests.get("https://time-in.ru/coordinates/russia")
+                for line in db.show_info(message.from_user.id)[0][3].split("\n"):
+                    r = requests.get(
+                        f"https://time-in.ru/coordinates/{line[0].lower() + line[1:]}"
+                    )
                 html = bs(r.content, "html.parser")
-                items = html.select(".coordinates-items > li")
-                if len(items):
-                    for el in items:
-                        if (
-                            el.select(".coordinates-items-left")[0].text
-                            == db.show_info(message.from_user.id)[0][3]
-                        ):
-                            title = el.select(".coordinates-items-right")
-                            api = requests.get(
-                                f"https://api.openweathermap.org/data/2.5/weather?lat={title[0].text.split(', ')[0]}&lon={title[0].text.split(', ')[1]}&appid={weather_API}"
-                            ).json()
-                            await message.answer(
-                                f'\nCity: {db.show_info(message.from_user.id)[0][3]}\nTemperature: {round(api["main"]["temp"] - 273)}°С\nDescription: {api["weather"][0]["description"]}\nHumidity: {api["main"]["humidity"]}%'
-                            )
+                title = re.compile("[а-яА-Я|:|^,]").sub(
+                    "", html.select(".coordinates-city-info")[0].text
+                )
+                api = requests.get(
+                    f"https://api.openweathermap.org/data/2.5/weather?lat={title.split(' ')[2]}&lon={title.split(' ')[3]}&appid={weather_API}"
+                ).json()
+                await message.answer(
+                    f'\nCity: {api["name"]}\nTemperature: {round(api["main"]["temp"] - 273)}°С\nDescription: {api["weather"][0]["description"]}\nHumidity: {api["main"]["humidity"]}%'
+                )
             except IndexError or TypeError:
                 await message.answer(
                     "<strong>Enter your profile information</strong> /settings"
@@ -264,7 +281,7 @@ async def reply_callbacks(message: types.Message):
                 )
             except IndexError or TypeError:
                 await message.answer(
-                    f"<strong>ID</strong> - {message.from_user.id}\n<strong>Name</strong> - empty\n<strong>City</strong> - empty\n\n<strong>To display the data you need to enter all of them</strong>",
+                    f"<strong>ID</strong> - {message.from_user.id}\n<strong>Name</strong> - empty\n<<strong>City</strong> - empty\n\n<strong>To display the data you need to enter all of them</strong>",
                     reply_markup=markup,
                 )
 

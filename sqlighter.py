@@ -30,6 +30,13 @@ class SQLighter:
                 (user_id, city),
             )
 
+    def inster_country(self, user_id, country):
+        with self.connect:
+            self.cursor.execute(
+                f"INSERT INTO `users` (`user_id`, `country`) VALUES (?, ?)",
+                (user_id, country),
+            )
+
     def update_name(self, user_id, name):
         with self.connect:
             self.cursor.execute(
@@ -40,4 +47,11 @@ class SQLighter:
         with self.connect:
             self.cursor.execute(
                 f"UPDATE `users` SET `city` = ? WHERE `user_id` = ?", (city, user_id)
+            )
+
+    def update_country(self, user_id, country):
+        with self.connect:
+            self.cursor.execute(
+                f"UPDATE `users` SET `country` = ? WHERE `user_id` = ?",
+                (country, user_id),
             )
